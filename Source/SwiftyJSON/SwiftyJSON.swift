@@ -22,6 +22,18 @@
 
 import Foundation
 
+extension Date {
+    var formatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZZZZZ"
+        return formatter
+    }
+
+    var string: String {
+        formatter.string(from: self)
+    }
+}
+
 // MARK: - Error
 // swiftlint:disable line_length
 public enum SwiftyJSONError: Int, Swift.Error {
@@ -71,6 +83,7 @@ public enum Type: Int {
 	case number
 	case string
 	case bool
+    case date
 	case array
 	case dictionary
 	case null
@@ -201,6 +214,7 @@ public struct JSON {
     fileprivate var rawNumber: NSNumber = 0
     fileprivate var rawNull: NSNull = NSNull()
     fileprivate var rawBool: Bool = false
+    fileprivate var rawDate: Date = Date(timeIntervalSince1970: 0)
 
     /// JSON type, fileprivate setter
     public fileprivate(set) var type: Type = .null
@@ -217,6 +231,7 @@ public struct JSON {
             case .string:     return rawString
             case .number:     return rawNumber
             case .bool:       return rawBool
+            case .date:       return rawDate
             default:          return rawNull
             }
         }
@@ -234,6 +249,9 @@ public struct JSON {
             case let string as String:
                 type = .string
                 rawString = string
+            case let date as Date:
+                type = .date
+                rawDate = date
             case _ as NSNull:
                 type = .null
             case Optional<Any>.none:
@@ -650,6 +668,7 @@ extension JSON: Swift.RawRepresentable {
             }
         case .string: return rawString
         case .number: return rawNumber.stringValue
+        case .date: return rawDate.string
         case .bool:   return rawBool.description
         case .null:   return "null"
         default:      return nil
@@ -793,6 +812,37 @@ extension JSON {
             case .number: return rawNumber.stringValue
             case .bool:   return (object as? Bool).map { String($0) } ?? ""
             default:      return ""
+            }
+        }
+        set {
+            object = newValue
+        }
+    }
+}
+
+// MARK: - Date
+
+extension JSON {
+
+    //Optional string
+    public var date: Date? {
+        get {
+            switch type {
+            case .date: return object as? Date
+            default:      return nil
+            }
+        }
+        set {
+            object = newValue ?? NSNull()
+        }
+    }
+
+    //Non-optional string
+    public var dateValue: Date {
+        get {
+            switch type {
+            case .date: return object as? Date ?? Date.init(timeIntervalSince1970: 0)
+            default:      return Date.init(timeIntervalSince1970: 0)
             }
         }
         set {
@@ -1166,6 +1216,7 @@ public func == (lhs: JSON, rhs: JSON) -> Bool {
     switch (lhs.type, rhs.type) {
     case (.number, .number): return lhs.rawNumber == rhs.rawNumber
     case (.string, .string): return lhs.rawString == rhs.rawString
+    case (.date, .date): return lhs.rawDate == rhs.rawDate
     case (.bool, .bool):     return lhs.rawBool == rhs.rawBool
     case (.array, .array):   return lhs.rawArray as NSArray == rhs.rawArray as NSArray
     case (.dictionary, .dictionary): return lhs.rawDictionary as NSDictionary == rhs.rawDictionary as NSDictionary
@@ -1179,6 +1230,7 @@ public func <= (lhs: JSON, rhs: JSON) -> Bool {
     switch (lhs.type, rhs.type) {
     case (.number, .number): return lhs.rawNumber <= rhs.rawNumber
     case (.string, .string): return lhs.rawString <= rhs.rawString
+    case (.date, .date): return lhs.rawDate <= rhs.rawDate
     case (.bool, .bool):     return lhs.rawBool == rhs.rawBool
     case (.array, .array):   return lhs.rawArray as NSArray == rhs.rawArray as NSArray
     case (.dictionary, .dictionary): return lhs.rawDictionary as NSDictionary == rhs.rawDictionary as NSDictionary
@@ -1192,6 +1244,7 @@ public func >= (lhs: JSON, rhs: JSON) -> Bool {
     switch (lhs.type, rhs.type) {
     case (.number, .number): return lhs.rawNumber >= rhs.rawNumber
     case (.string, .string): return lhs.rawString >= rhs.rawString
+    case (.date, .date): return lhs.rawDate >= rhs.rawDate
     case (.bool, .bool):     return lhs.rawBool == rhs.rawBool
     case (.array, .array):   return lhs.rawArray as NSArray == rhs.rawArray as NSArray
     case (.dictionary, .dictionary): return lhs.rawDictionary as NSDictionary == rhs.rawDictionary as NSDictionary
@@ -1204,6 +1257,7 @@ public func > (lhs: JSON, rhs: JSON) -> Bool {
 
     switch (lhs.type, rhs.type) {
     case (.number, .number): return lhs.rawNumber > rhs.rawNumber
+    case (.date, .date): return lhs.rawDate > rhs.rawDate
     case (.string, .string): return lhs.rawString > rhs.rawString
     default:                 return false
     }
@@ -1213,6 +1267,7 @@ public func < (lhs: JSON, rhs: JSON) -> Bool {
 
     switch (lhs.type, rhs.type) {
     case (.number, .number): return lhs.rawNumber < rhs.rawNumber
+    case (.date, .date): return lhs.rawDate < rhs.rawDate
     case (.string, .string): return lhs.rawString < rhs.rawString
     default:                 return false
     }
@@ -1307,6 +1362,7 @@ extension JSON: Codable {
             UInt32.self,
             UInt64.self,
             Double.self,
+            Date.self,
             String.self,
             [JSON].self,
             [String: JSON].self
@@ -1346,6 +1402,8 @@ extension JSON: Codable {
                     object = try? container.decode(doubleType)
                 case let stringType as String.Type:
                     object = try? container.decode(stringType)
+                case let dateType as Date.Type:
+                    object = try? container.decode(dateType)
                 case let jsonValueArrayType as [JSON].Type:
                     object = try? container.decode(jsonValueArrayType)
                 case let jsonValueDictType as [String: JSON].Type:
@@ -1388,6 +1446,8 @@ extension JSON: Codable {
             try container.encode(boolValue)
         case let stringValue as String:
             try container.encode(stringValue)
+        case let dateValue as Date:
+            try container.encode(dateValue)
         case is [Any]:
             let jsonValueArray = array ?? []
             try container.encode(jsonValueArray)
